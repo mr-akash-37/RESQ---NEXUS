@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alerts — ResQ Nexus</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="topnav-inner">
+    <a href="/" class="brand"><span class="mark">●</span> ResQ Nexus</a>
+    <div class="nav-links">
+      <a href="/" data-i18n="nav_home">Home</a>
+      <a href="/report" data-i18n="nav_report">Report incident</a>
+      <a href="/dashboard" data-i18n="nav_dashboard">Dashboard</a>
+      <a href="/resources" data-i18n="nav_resources">Resources</a>
+      <a href="/alerts" class="active" data-i18n="nav_alerts">Alerts</a>
+    </div>
+    <select id="langToggle" class="nav-lang">
+      <option value="en">EN</option>
+      <option value="hi">हिं</option>
+    </select>
+  </div>
+</nav>
+
+<header class="page-head">
+  <div class="container">
+    <h1>Alert log</h1>
+    <p>Every alert is tracked from send to acknowledgment. An alert left
+    unacknowledged for 10 minutes is automatically flagged for escalation to
+    a backup contact — the gap that repeatedly worsened past flood responses.</p>
+  </div>
+</header>
+
+<section class="container mt-40">
+  <div class="panel">
+    <table id="alertTable">
+      <thead>
+        <tr><th>Message</th><th>Channel</th><th>District</th><th>Status</th><th class="mono">Sent</th><th></th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</section>
+
+<script src="/js/common.js"></script>
+<script>
+function statusBadge(status) {
+  if (status === 'acknowledged') return 'severity-low';
+  if (status === 'escalated') return 'severity-high';
+  return 'severity-mid';
+}
+
+async function loadAlerts() {
+  const alerts = await api('/api/alerts');
+  const tbody = document.querySelector('#alertTable tbody');
+  if (alerts.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">No alerts sent yet. Alerts are created automatically from SOS requests, or can be sent from the dashboard.</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = alerts.map((a) => `
+    <tr>
+      <td>${a.message}</td>
+      <td>${a.channel}</td>
+      <td>${a.sent_to_district || '—'}</td>
+      <td><span class="badge ${statusBadge(a.delivery_status)}">${a.delivery_status}${a.escalated_to ? ' → ' + a.escalated_to : ''}</span></td>
+      <td class="mono">${new Date(a.sent_at).toLocaleTimeString()}</td>
+      <td>${a.delivery_status === 'sent' ? `<button class="btn btn-sm btn-outline" onclick="ack(${a.alert_id})">Acknowledge</button>` : ''}</td>
+    </tr>
+  `).join('');
+}
+
+async function ack(id) {
+  try {
+    await api(`/api/alerts/${id}/acknowledge`, { method: 'POST' });
+    toast('Alert acknowledged.');
+    loadAlerts();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+window.ack = ack;
+
+loadAlerts().catch((e) => toast(e.message, true));
+setInterval(() => loadAlerts().catch(() => {}), 15000);
+</script>
+</body>
+</html>
